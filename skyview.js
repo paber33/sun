@@ -24,7 +24,7 @@ const SKY = {
 
 // Smoothing state (separate so we can reset without clobbering SKY.alpha)
 const _sm = { alpha: 180, beta: 90, gamma: 0 };
-const SMOOTH = 0.14;  // exponential factor: lower = smoother, higher = more responsive
+const SMOOTH = 0.12;  // exponential factor: lower = smoother, higher = more responsive
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -290,25 +290,39 @@ function _render() {
 
   const cam = _cameraBasis(alpha, beta, gamma);
 
-  // ── Sky / ground background ─────────────────────────────────────────────────
-  // Horizon screen Y: project a point at elevation 0° ahead
-  const elev = (beta - 90) * Math.PI / 180;
-  const focal = (W / 2) / Math.tan(FOV / 2 * Math.PI / 180);
-  const horizonY = H / 2 + Math.tan(-elev) * focal;
+  // ── Horizon screen position ─────────────────────────────────────────────────
+  const elev   = (beta - 90) * Math.PI / 180;
+  const focal  = (W / 2) / Math.tan(FOV / 2 * Math.PI / 180);
+  const hY     = H * (0.5 + HORIZON_Y) + Math.tan(-elev) * focal;
+  const skyBot = Math.max(0, Math.min(H, hY));
 
-  const skyGrad = ctx.createLinearGradient(0, 0, 0, Math.min(horizonY, H));
-  skyGrad.addColorStop(0,   '#04050c');
-  skyGrad.addColorStop(0.6, '#080d1e');
-  skyGrad.addColorStop(1,   '#0d1830');
+  // ── Sky gradient ────────────────────────────────────────────────────────────
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, skyBot);
+  skyGrad.addColorStop(0,    '#020308');
+  skyGrad.addColorStop(0.55, '#07091a');
+  skyGrad.addColorStop(1,    '#0d1428');
   ctx.fillStyle = skyGrad;
-  ctx.fillRect(0, 0, W, H);
+  ctx.fillRect(0, 0, W, skyBot);
 
-  if (horizonY < H) {
-    const gndGrad = ctx.createLinearGradient(0, Math.max(0, horizonY), 0, H);
-    gndGrad.addColorStop(0, '#090d08');
-    gndGrad.addColorStop(1, '#050705');
-    ctx.fillStyle = gndGrad;
-    ctx.fillRect(0, Math.max(0, horizonY), W, H - Math.max(0, horizonY));
+  // ── Horizon atmospheric glow ────────────────────────────────────────────────
+  const glowH = Math.max(30, H / 15);
+  if (skyBot > 0 && skyBot < H) {
+    const glowGrad = ctx.createLinearGradient(0, skyBot - glowH, 0, skyBot + glowH * 0.5);
+    glowGrad.addColorStop(0,   'rgba(30,60,120,0)');
+    glowGrad.addColorStop(0.5, 'rgba(40,80,160,0.18)');
+    glowGrad.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = glowGrad;
+    ctx.fillRect(0, Math.max(0, skyBot - glowH), W, glowH * 1.5);
+  }
+
+  // ── Ground ──────────────────────────────────────────────────────────────────
+  if (skyBot < H) {
+    const gGrad = ctx.createLinearGradient(0, skyBot, 0, H);
+    gGrad.addColorStop(0,   '#0b0f0a');
+    gGrad.addColorStop(0.4, '#080b07');
+    gGrad.addColorStop(1,   '#050705');
+    ctx.fillStyle = gGrad;
+    ctx.fillRect(0, skyBot, W, H - skyBot);
   }
 
   // ── Grid ────────────────────────────────────────────────────────────────────
@@ -388,99 +402,157 @@ function _project(P, cam, W, H) {
 
 function _drawGrid(ctx, cam, W, H) {
   ctx.save();
-  const lw = Math.max(0.8, W / 900);
+  const lw = Math.max(1, W / 700);
 
   // ── Altitude rings every 15° ──────────────────────────────────────────────
   for (let alt = 0; alt <= 90; alt += 15) {
-    const pts = [];
+    const isHorizon = alt === 0;
+    const isZenith  = alt === 90;
+
+    // Collect visible segments (break line when gap is too large)
+    const segs = [[]];
     for (let az = 0; az <= 360; az += 2) {
       const s = _project(_azAltToENU(az, alt), cam, W, H);
-      if (s) pts.push(s);
-    }
-    if (pts.length < 2) continue;
-
-    const isHorizon = alt === 0;
-    ctx.beginPath();
-    ctx.lineWidth = isHorizon ? lw * 2.5 : lw;
-    ctx.strokeStyle = isHorizon
-      ? 'rgba(120,160,220,0.7)'
-      : alt === 90
-        ? 'rgba(80,120,180,0.35)'
-        : 'rgba(60,90,150,0.28)';
-    ctx.setLineDash(isHorizon ? [] : [W/70, W/55]);
-    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Altitude label on E side (az=90)
-    if (alt > 0 && alt < 90) {
-      const ls = _project(_azAltToENU(90, alt), cam, W, H);
-      if (ls && ls.x >= 0 && ls.x <= W && ls.y >= 0 && ls.y <= H) {
-        const fs = Math.max(9, W / 60);
-        ctx.font = `${fs}px -apple-system, system-ui, sans-serif`;
-        ctx.fillStyle = 'rgba(100,140,200,0.6)';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${alt}°`, ls.x + fs * 0.4, ls.y);
+      if (s) {
+        const cur = segs[segs.length - 1];
+        if (cur.length > 0) {
+          const last = cur[cur.length - 1];
+          if (Math.hypot(s.x - last.x, s.y - last.y) > W * 0.4) segs.push([]);
+        }
+        segs[segs.length - 1].push(s);
+      } else {
+        if (segs[segs.length - 1].length > 0) segs.push([]);
       }
     }
+
+    segs.forEach(pts => {
+      if (pts.length < 2) return;
+      // Glow pass for horizon
+      if (isHorizon) {
+        ctx.beginPath();
+        ctx.lineWidth = lw * 6;
+        ctx.strokeStyle = 'rgba(80,130,220,0.12)';
+        ctx.setLineDash([]);
+        pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+        ctx.stroke();
+      }
+      // Main line
+      ctx.beginPath();
+      ctx.lineWidth = isHorizon ? lw * 2.2 : lw * 0.9;
+      ctx.strokeStyle = isHorizon
+        ? 'rgba(140,185,255,0.75)'
+        : isZenith
+          ? 'rgba(80,120,200,0.3)'
+          : 'rgba(60,90,160,0.32)';
+      ctx.setLineDash(isHorizon || isZenith ? [] : [W / 65, W / 50]);
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Altitude label near the visible ring
+    if (alt > 0 && alt < 90) {
+      // Try multiple azimuths to find one on-screen
+      for (const testAz of [90, 270, 0, 180, 45, 135, 225, 315]) {
+        const ls = _project(_azAltToENU(testAz, alt), cam, W, H);
+        if (ls && ls.x > W * 0.05 && ls.x < W * 0.95 && ls.y > H * 0.02 && ls.y < H * 0.92) {
+          const fs = Math.max(9, W / 58);
+          ctx.font = `${fs}px -apple-system, system-ui, sans-serif`;
+          ctx.fillStyle = 'rgba(120,160,220,0.65)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${alt}°`, ls.x, ls.y - fs * 0.8);
+          break;
+        }
+      }
+    }
+  }
+
+  // ── Zenith crosshair ──────────────────────────────────────────────────────
+  const zenith = _project([0, 0, 1], cam, W, H);
+  if (zenith && zenith.x > 0 && zenith.x < W && zenith.y > 0 && zenith.y < H) {
+    const cr = Math.max(8, W / 55);
+    ctx.strokeStyle = 'rgba(140,180,255,0.55)';
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(zenith.x - cr, zenith.y); ctx.lineTo(zenith.x + cr, zenith.y);
+    ctx.moveTo(zenith.x, zenith.y - cr); ctx.lineTo(zenith.x, zenith.y + cr);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(zenith.x, zenith.y, cr * 0.4, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(140,180,255,0.4)';
+    ctx.stroke();
+    const fs = Math.max(9, W / 60);
+    ctx.font = `${fs}px -apple-system, system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(140,180,255,0.5)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('90°', zenith.x, zenith.y + cr * 0.7);
   }
 
   // ── Azimuth spokes every 15° ──────────────────────────────────────────────
   for (let az = 0; az < 360; az += 15) {
     const pts = [];
-    for (let alt = 0; alt <= 90; alt += 3) {
+    for (let alt = 0; alt <= 90; alt += 2) {
       const s = _project(_azAltToENU(az, alt), cam, W, H);
-      if (s) pts.push(s);
+      if (s) {
+        if (pts.length > 0 && Math.hypot(s.x - pts[pts.length-1].x, s.y - pts[pts.length-1].y) > W * 0.3) break;
+        pts.push(s);
+      }
     }
     if (pts.length < 2) continue;
-
     ctx.beginPath();
-    ctx.lineWidth = lw;
-    ctx.strokeStyle = az % 90 === 0
-      ? 'rgba(80,110,170,0.35)'
-      : 'rgba(50,75,130,0.2)';
+    ctx.lineWidth = az % 90 === 0 ? lw * 1.1 : lw * 0.7;
+    ctx.strokeStyle = az % 90 === 0 ? 'rgba(80,115,185,0.38)' : 'rgba(50,75,140,0.2)';
     pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
     ctx.stroke();
   }
 
-  // ── Compass labels at horizon ─────────────────────────────────────────────
-  const compassDirs = [
-    { az: 0,   label: 'N',   major: true,  color: '#ef4444' },
-    { az: 22.5,label: 'NNE', major: false, color: '#64748b' },
-    { az: 45,  label: 'NE',  major: true,  color: '#94a3b8' },
-    { az: 67.5,label: 'ENE', major: false, color: '#64748b' },
-    { az: 90,  label: 'E',   major: true,  color: '#94a3b8' },
-    { az: 112.5,label:'ESE', major: false, color: '#64748b' },
-    { az: 135, label: 'SE',  major: true,  color: '#94a3b8' },
-    { az: 157.5,label:'SSE', major: false, color: '#64748b' },
-    { az: 180, label: 'S',   major: true,  color: '#94a3b8' },
-    { az: 202.5,label:'SSW', major: false, color: '#64748b' },
-    { az: 225, label: 'SW',  major: true,  color: '#94a3b8' },
-    { az: 247.5,label:'WSW', major: false, color: '#64748b' },
-    { az: 270, label: 'W',   major: true,  color: '#94a3b8' },
-    { az: 292.5,label:'WNW', major: false, color: '#64748b' },
-    { az: 315, label: 'NW',  major: true,  color: '#94a3b8' },
-    { az: 337.5,label:'NNW', major: false, color: '#64748b' },
-  ];
+  // ── Horizon tick marks + degree numbers every 30° ────────────────────────
+  const tickAzStep = 30;
+  const majFs  = Math.max(12, W / 32);
+  const minFs  = Math.max(9,  W / 50);
+  const tickLw = Math.max(1,  W / 600);
 
-  const majorSize = Math.max(14, W / 28);
-  const minorSize = Math.max(10, W / 44);
+  for (let az = 0; az < 360; az += 10) {
+    const isMaj  = az % tickAzStep === 0;
+    const isCard = az % 90 === 0;
+    const s0 = _project(_azAltToENU(az,  0.3), cam, W, H);
+    const s1 = _project(_azAltToENU(az, -1.8), cam, W, H);
+    if (!s0 || !s1) continue;
+    if (s0.x < -40 || s0.x > W + 40) continue;
 
-  compassDirs.forEach(d => {
-    const P = _azAltToENU(d.az, -1.5);
-    const s = _project(P, cam, W, H);
-    if (!s || s.x < -60 || s.x > W + 60 || s.y < -40 || s.y > H + 40) return;
+    // Tick line
+    ctx.beginPath();
+    ctx.lineWidth = tickLw * (isCard ? 2.5 : isMaj ? 1.6 : 1);
+    ctx.strokeStyle = isCard
+      ? 'rgba(180,210,255,0.7)'
+      : isMaj
+        ? 'rgba(120,160,220,0.5)'
+        : 'rgba(80,110,170,0.3)';
+    ctx.moveTo(s0.x, s0.y); ctx.lineTo(s1.x, s1.y);
+    ctx.stroke();
 
-    ctx.font = `bold ${d.major ? majorSize : minorSize}px -apple-system, system-ui, sans-serif`;
+    if (!isMaj) continue;
+
+    // Cardinal letters
+    const cardLabel = { 0:'N', 90:'E', 180:'S', 270:'W' }[az];
+    const label = cardLabel || `${az}°`;
+    const isN = az === 0;
+    const fs  = isCard ? majFs : minFs;
+
+    const sL = _project(_azAltToENU(az, -3.5), cam, W, H);
+    if (!sL || sL.x < -30 || sL.x > W + 30 || sL.y < -20 || sL.y > H + 20) continue;
+
+    ctx.font = `bold ${fs}px -apple-system, system-ui, sans-serif`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = d.color;
-    ctx.shadowColor = d.label === 'N' ? '#ef4444' : 'transparent';
-    ctx.shadowBlur  = d.label === 'N' ? 10 : 0;
-    ctx.fillText(d.label, s.x, s.y);
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = isN ? '#ef4444' : 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur  = isN ? 12 : 4;
+    ctx.fillStyle   = isN ? '#f87171' : isCard ? '#e2e8f0' : 'rgba(148,163,184,0.85)';
+    ctx.fillText(label, sL.x, sL.y);
     ctx.shadowBlur = 0;
-  });
+  }
 
   ctx.restore();
 }
@@ -523,56 +595,82 @@ function _buildSunPath() {
 function _drawSunPath(ctx, cam, W, H) {
   if (!SKY.sunPathPoints.length) return;
   ctx.save();
-  ctx.lineWidth = Math.max(2.5, W / 200);
   ctx.lineCap  = 'round';
   ctx.lineJoin = 'round';
 
-  let prevScreen = null;
+  const baseLw   = Math.max(3, W / 150);
+  const glowLw   = Math.max(10, W / 40);
 
-  SKY.sunPathPoints.forEach(pt => {
-    const s = _project(_azAltToENU(pt.az, pt.alt), cam, W, H);
+  // Two passes: glow (wide, low alpha) then solid (sharp)
+  for (const pass of ['glow', 'solid']) {
+    let prevScreen = null;
 
-    if (s && prevScreen) {
-      const dist = Math.hypot(s.x - prevScreen.x, s.y - prevScreen.y);
-      if (dist < W * 0.5) {
-        ctx.beginPath();
-        ctx.moveTo(prevScreen.x, prevScreen.y);
-        ctx.lineTo(s.x, s.y);
-        if (pt.phase === 'below') {
-          ctx.strokeStyle = 'rgba(80,100,160,0.22)';
-          ctx.setLineDash([W / 100, W / 70]);
-        } else if (pt.phase === 'golden') {
-          ctx.strokeStyle = 'rgba(251,191,36,0.9)';
-          ctx.lineWidth = Math.max(3, W / 160);
-          ctx.setLineDash([]);
-        } else {
-          ctx.strokeStyle = 'rgba(240,240,255,0.6)';
-          ctx.lineWidth = Math.max(2.5, W / 200);
-          ctx.setLineDash([]);
+    SKY.sunPathPoints.forEach(pt => {
+      const s = _project(_azAltToENU(pt.az, pt.alt), cam, W, H);
+
+      if (s && prevScreen) {
+        const dist = Math.hypot(s.x - prevScreen.x, s.y - prevScreen.y);
+        if (dist < W * 0.5) {
+          ctx.beginPath();
+          ctx.moveTo(prevScreen.x, prevScreen.y);
+          ctx.lineTo(s.x, s.y);
+
+          if (pt.phase === 'below') {
+            if (pass === 'solid') {
+              ctx.lineWidth = Math.max(1.5, W / 300);
+              ctx.strokeStyle = 'rgba(70,90,150,0.25)';
+              ctx.setLineDash([W / 90, W / 60]);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
+          } else if (pt.phase === 'golden') {
+            if (pass === 'glow') {
+              ctx.lineWidth = glowLw;
+              ctx.strokeStyle = 'rgba(251,140,10,0.12)';
+              ctx.stroke();
+            } else {
+              ctx.lineWidth = baseLw * 1.3;
+              ctx.strokeStyle = 'rgba(251,175,20,0.95)';
+              ctx.stroke();
+            }
+          } else {
+            if (pass === 'glow') {
+              ctx.lineWidth = glowLw * 0.7;
+              ctx.strokeStyle = 'rgba(200,200,255,0.08)';
+              ctx.stroke();
+            } else {
+              ctx.lineWidth = baseLw;
+              ctx.strokeStyle = 'rgba(220,230,255,0.75)';
+              ctx.stroke();
+            }
+          }
         }
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.lineWidth = Math.max(2.5, W / 200);
       }
-    }
-    prevScreen = s;
+      prevScreen = s;
 
-    // Hour label
-    if (pt.label && s && s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H) {
-      const fs = Math.max(10, W / 52);
-      ctx.font = `${fs}px -apple-system, system-ui, sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      // tick dot
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, Math.max(2.5, W / 180), 0, Math.PI * 2);
-      ctx.fillStyle = pt.phase === 'golden' ? '#fbbf24' : 'rgba(200,210,240,0.8)';
-      ctx.fill();
-      // text
-      ctx.fillStyle = pt.phase === 'golden' ? 'rgba(251,191,36,0.95)' : 'rgba(200,210,240,0.85)';
-      ctx.fillText(pt.label, s.x, s.y - Math.max(3, W / 160));
-    }
-  });
+      // Hour label (solid pass only)
+      if (pass === 'solid' && pt.label && s &&
+          s.x >= 0 && s.x <= W && s.y >= 0 && s.y <= H) {
+        const fs = Math.max(10, W / 50);
+        const isGold = pt.phase === 'golden';
+        const dotR = Math.max(3, W / 160);
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, dotR, 0, Math.PI * 2);
+        ctx.fillStyle = isGold ? '#fbbf24' : 'rgba(210,220,255,0.85)';
+        ctx.fill();
+
+        ctx.font = `bold ${fs}px -apple-system, system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.shadowColor = 'rgba(0,0,0,0.9)';
+        ctx.shadowBlur  = 5;
+        ctx.fillStyle   = isGold ? '#fde68a' : 'rgba(210,220,255,0.9)';
+        ctx.fillText(pt.label, s.x, s.y - dotR - 2);
+        ctx.shadowBlur = 0;
+      }
+    });
+  }
 
   ctx.restore();
 }
