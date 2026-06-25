@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="description" content="Track sun position, sunrise and sunset for any location">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sun Tracker">
+  <title>Sun Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon.svg">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="header-title">
+      <svg class="sun-logo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="4.5" fill="#f59e0b"/>
+        <line x1="12" y1="2.5" x2="12" y2="5"   stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="12" y1="19" x2="12" y2="21.5"  stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="2.5" y1="12" x2="5" y2="12"   stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="19" y1="12" x2="21.5" y2="12"  stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="5.05" y1="5.05" x2="6.87" y2="6.87" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="17.13" y1="17.13" x2="18.95" y2="18.95" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="5.05" y1="18.95" x2="6.87" y2="17.13" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+        <line x1="17.13" y1="6.87" x2="18.95" y2="5.05" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <span>Sun Tracker</span>
+    </div>
+    <div class="search-wrapper">
+      <input
+        type="text"
+        id="search-input"
+        placeholder="Search location…"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        value="London, UK"
+      >
+      <button id="skyview-btn" title="Sky View (3D dome)" aria-label="Open sky view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 2a10 10 0 0 1 0 20"/>
+          <path d="M2 12h20"/>
+          <path d="M12 2C8 6 6 9 6 12s2 6 6 10"/>
+          <path d="M12 2c4 4 6 7 6 10s-2 6-6 10"/>
+        </svg>
+      </button>
+      <button id="locate-btn" title="Use my location" aria-label="Use my location">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+          <circle cx="12" cy="12" r="8" stroke-opacity="0.35"/>
+        </svg>
+      </button>
+    </div>
+    <div id="search-dropdown" class="search-dropdown hidden"></div>
+  </header>
+
+  <main>
+
+    <!-- Map -->
+    <section class="map-section">
+      <div id="map"></div>
+      <div class="map-coords">51.5074°, -0.1278°</div>
+    </section>
+
+    <!-- Sun Arc -->
+    <section class="arc-section">
+      <svg id="sun-arc" viewBox="0 0 320 170" preserveAspectRatio="xMidYMid meet" aria-label="Sun trajectory arc">
+        <defs>
+          <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="#101828"/>
+            <stop offset="100%" stop-color="#07080f"/>
+          </linearGradient>
+          <filter id="sunGlow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+
+        <!-- Sky background -->
+        <rect x="0" y="0" width="320" height="148" fill="url(#skyGrad)" rx="10"/>
+
+        <!-- Altitude grid lines -->
+        <line x1="38" y1="101" x2="295" y2="101" stroke="#1e2540" stroke-width="1" stroke-dasharray="3 4"/>
+        <line x1="38" y1="62"  x2="295" y2="62"  stroke="#1e2540" stroke-width="1" stroke-dasharray="3 4"/>
+        <line x1="38" y1="23"  x2="295" y2="23"  stroke="#1e2540" stroke-width="1" stroke-dasharray="3 4"/>
+
+        <!-- Horizon line -->
+        <line x1="20" y1="140" x2="300" y2="140" stroke="#2a3550" stroke-width="1.5"/>
+
+        <!-- Ground fill -->
+        <rect x="0" y="140" width="320" height="30" fill="#07080f"/>
+        <rect x="10" y="148" width="300" height="12" fill="#0a0f1a" rx="4"/>
+
+        <!-- Main arc path (filled by JS) -->
+        <path id="arc-path" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+
+        <!-- Sun dot (moved by JS) -->
+        <g id="sun-dot" transform="translate(-100,-100)">
+          <circle r="10" fill="#f59e0b" opacity="0.25" filter="url(#sunGlow)"/>
+          <circle r="6"  fill="#f59e0b" opacity="0.8"/>
+          <circle r="3"  fill="#fef3c7"/>
+        </g>
+
+        <!-- Compass / direction labels -->
+        <text x="24"  y="156" class="arc-label">E</text>
+        <text x="158" y="156" class="arc-label" text-anchor="middle">S</text>
+        <text x="296" y="156" class="arc-label" text-anchor="end">W</text>
+
+        <!-- Altitude labels -->
+        <text x="33"  y="105" class="arc-tick" text-anchor="end">30°</text>
+        <text x="33"  y="66"  class="arc-tick" text-anchor="end">60°</text>
+        <text x="33"  y="27"  class="arc-tick" text-anchor="end">90°</text>
+      </svg>
+      <div class="arc-time-display" id="arc-time-display">—</div>
+    </section>
+
+    <!-- Info Cards -->
+    <section class="info-section">
+      <div class="info-grid">
+        <div class="info-card sunrise">
+          <div class="info-icon">↑</div>
+          <div class="info-content">
+            <div class="info-label">Sunrise</div>
+            <div class="info-time" id="sunrise-time">—</div>
+            <div class="info-dir"  id="sunrise-dir">—</div>
+          </div>
+        </div>
+        <div class="info-card sunset">
+          <div class="info-icon">↓</div>
+          <div class="info-content">
+            <div class="info-label">Sunset</div>
+            <div class="info-time" id="sunset-time">—</div>
+            <div class="info-dir"  id="sunset-dir">—</div>
+          </div>
+        </div>
+        <div class="info-card noon">
+          <div class="info-icon">⊙</div>
+          <div class="info-content">
+            <div class="info-label">Solar Noon</div>
+            <div class="info-time" id="noon-time">—</div>
+            <div class="info-dir"  id="noon-alt">—</div>
+          </div>
+        </div>
+        <div class="info-card daylength">
+          <div class="info-icon">◷</div>
+          <div class="info-content">
+            <div class="info-label">Day Length</div>
+            <div class="info-time" id="day-length">—</div>
+            <div class="info-dir"  id="golden-hour"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sun-position-bar">
+        <div class="pos-item">
+          <span class="pos-label">Azimuth</span>
+          <span class="pos-value" id="current-azimuth">—</span>
+        </div>
+        <div class="pos-item">
+          <span class="pos-label">Altitude</span>
+          <span class="pos-value" id="current-altitude">—</span>
+        </div>
+        <div class="pos-item">
+          <span class="pos-label">Phase</span>
+          <span class="pos-value" id="sun-phase" style="font-size:12px">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section class="controls-section">
+      <div class="time-control">
+        <input
+          type="range"
+          id="time-slider"
+          min="0"
+          max="1439"
+          value="720"
+          step="1"
+          aria-label="Time of day"
+        >
+        <div class="time-labels">
+          <span>00:00</span>
+          <span id="slider-time-label">12:00</span>
+          <span>24:00</span>
+        </div>
+      </div>
+      <div class="date-control">
+        <button id="today-btn" class="btn btn-secondary">Now</button>
+        <input type="date" id="date-picker" class="date-input" aria-label="Select date">
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Sky View overlay -->
+  <div id="skyview-overlay" class="skyview-overlay hidden">
+    <canvas id="skyview-canvas" class="skyview-canvas"></canvas>
+    <button id="skyview-close" class="skyview-close" aria-label="Close sky view">✕</button>
+    <div class="skyview-permission-hint hidden" id="skyview-hint">
+      <p>Point your phone at the sky to track the sun</p>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="suncalc.js"></script>
+  <script src="skyview.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
