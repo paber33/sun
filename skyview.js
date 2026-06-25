@@ -322,13 +322,16 @@ function _cameraBasis(alphaDeg, betaDeg, gammaDeg) {
   return { fwd, right, up };
 }
 
+// Horizon offset: 0 = center, positive = lower on screen (sky gets more space)
+const HORIZON_Y = 0.25;  // horizon sits at 75% from top (1/4 below center)
+
 function _project(P, cam, W, H) {
   const df = _dot(P, cam.fwd);
   if (df < 0.05) return null;
   const focal = (W / 2) / Math.tan(SKY.FOV / 2 * Math.PI / 180);
   return {
     x: W / 2 + (_dot(P, cam.right) / df) * focal,
-    y: H / 2 - (_dot(P, cam.up)    / df) * focal,
+    y: H * (0.5 + HORIZON_Y) - (_dot(P, cam.up) / df) * focal,
     df
   };
 }
