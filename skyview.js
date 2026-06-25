@@ -230,36 +230,128 @@ function _applyTimeBarStyles() {
   if (!bar) return;
   Object.assign(bar.style, {
     position: 'absolute', bottom: '0', left: '0', right: '0',
-    height: '72px', background: 'rgba(4,5,12,0.92)',
+    height: '96px', background: 'rgba(4,5,12,0.92)',
     borderTop: '1px solid rgba(60,90,150,0.5)',
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
-    gap: '6px', padding: '0 20px', zIndex: '9015',
+    gap: '4px', padding: '8px 20px', zIndex: '9015',
+    boxSizing: 'border-box',
   });
+
+  const dateRow = document.getElementById('skyview-date-row');
+  if (dateRow) Object.assign(dateRow.style, {
+    display: 'flex', alignItems: 'center', gap: '12px',
+    width: '100%', justifyContent: 'center',
+  });
+
+  const btnStyle = {
+    background: 'none', border: '1px solid rgba(60,90,150,0.5)',
+    color: '#94a3b8', borderRadius: '6px', padding: '2px 10px',
+    fontSize: '18px', cursor: 'pointer', lineHeight: '1',
+    fontFamily: '-apple-system, system-ui, sans-serif',
+  };
+  const prevBtn = document.getElementById('skyview-prev-day');
+  const nextBtn = document.getElementById('skyview-next-day');
+  if (prevBtn) Object.assign(prevBtn.style, btnStyle);
+  if (nextBtn) Object.assign(nextBtn.style, btnStyle);
+
+  const dateLabel = document.getElementById('skyview-date-label');
+  if (dateLabel) Object.assign(dateLabel.style, {
+    fontSize: '13px', fontWeight: '600', color: '#e2e8f0', minWidth: '120px',
+    textAlign: 'center', fontFamily: '-apple-system, system-ui, sans-serif',
+  });
+
+  const sliderRow = document.getElementById('skyview-slider-row');
+  if (sliderRow) Object.assign(sliderRow.style, {
+    display: 'flex', alignItems: 'center', gap: '10px', width: '100%',
+  });
+
+  const slider = document.getElementById('skyview-slider');
+  if (slider) Object.assign(slider.style, {
+    flex: '1', height: '4px', cursor: 'pointer',
+    accentColor: '#f59e0b', outline: 'none',
+  });
+
+  const nowBtn = document.getElementById('skyview-now-btn');
+  if (nowBtn) Object.assign(nowBtn.style, {
+    background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)',
+    color: '#f59e0b', borderRadius: '6px', padding: '3px 10px',
+    fontSize: '12px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap',
+    fontFamily: '-apple-system, system-ui, sans-serif',
+  });
+
   const label = document.getElementById('skyview-time-label');
   if (label) Object.assign(label.style, {
     fontSize: '13px', fontWeight: '600', color: '#f59e0b',
     letterSpacing: '1px', fontFamily: '-apple-system, system-ui, sans-serif',
   });
-  const slider = document.getElementById('skyview-slider');
-  if (slider) Object.assign(slider.style, {
-    width: '100%', height: '4px', cursor: 'pointer',
-    accentColor: '#f59e0b', outline: 'none',
-  });
 }
 
 function _initTimeSlider() {
-  const slider = document.getElementById('skyview-slider');
-  const label  = document.getElementById('skyview-time-label');
+  const slider    = document.getElementById('skyview-slider');
+  const label     = document.getElementById('skyview-time-label');
+  const dateLabel = document.getElementById('skyview-date-label');
+  const nowBtn    = document.getElementById('skyview-now-btn');
+  const prevBtn   = document.getElementById('skyview-prev-day');
+  const nextBtn   = document.getElementById('skyview-next-day');
   if (!slider) return;
+
+  // Track whether we're on "today"
+  const _today = () => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  };
+  SKY._baseDate = new Date(SKY.date.getFullYear(), SKY.date.getMonth(), SKY.date.getDate());
+
+  function _updateDateLabel() {
+    const td = _today();
+    const bd = SKY._baseDate;
+    const diffDays = Math.round((bd - td) / 86400000);
+    if (diffDays === 0) dateLabel.textContent = 'Today';
+    else if (diffDays === 1) dateLabel.textContent = 'Tomorrow';
+    else if (diffDays === -1) dateLabel.textContent = 'Yesterday';
+    else dateLabel.textContent = bd.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
+
+  function _applyDate() {
+    SKY.date = new Date(SKY._baseDate);
+    _buildSunPath();
+    _updateDateLabel();
+  }
 
   slider.value = SKY.minutes;
   label.textContent = _minsToTime(SKY.minutes);
+  _updateDateLabel();
 
   slider.oninput = () => {
     SKY.minutes = parseInt(slider.value, 10);
     label.textContent = _minsToTime(SKY.minutes);
   };
+
+  if (nowBtn) {
+    nowBtn.onclick = () => {
+      const now = new Date();
+      SKY._baseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      SKY.minutes = now.getHours() * 60 + now.getMinutes();
+      slider.value = SKY.minutes;
+      label.textContent = _minsToTime(SKY.minutes);
+      _applyDate();
+    };
+  }
+
+  if (prevBtn) {
+    prevBtn.onclick = () => {
+      SKY._baseDate = new Date(SKY._baseDate.getTime() - 86400000);
+      _applyDate();
+    };
+  }
+
+  if (nextBtn) {
+    nextBtn.onclick = () => {
+      SKY._baseDate = new Date(SKY._baseDate.getTime() + 86400000);
+      _applyDate();
+    };
+  }
 }
 
 function _minsToTime(mins) {
@@ -748,7 +840,7 @@ function _drawHUD(ctx, W, H) {
 
   // ── Bottom info bar (sits above the HTML time slider, ~72px) ───────────────
   if (SKY._currentAz != null) {
-    const sliderH = 72 * devicePixelRatio;
+    const sliderH = 96 * devicePixelRatio;
     const barH = Math.max(56, H / 11);
     const barY = H - sliderH - barH;
 

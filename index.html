@@ -227,8 +227,16 @@
       <p>Point your phone at the sky to track the sun</p>
     </div>
     <div id="skyview-time-bar">
+      <div id="skyview-date-row">
+        <button id="skyview-prev-day" aria-label="Previous day">&#8249;</button>
+        <span id="skyview-date-label">Today</span>
+        <button id="skyview-next-day" aria-label="Next day">&#8250;</button>
+      </div>
+      <div id="skyview-slider-row">
+        <input type="range" id="skyview-slider" min="0" max="1439" value="720" step="1">
+        <button id="skyview-now-btn" title="Reset to current time">Now</button>
+      </div>
       <span id="skyview-time-label">12:00</span>
-      <input type="range" id="skyview-slider" min="0" max="1439" value="720" step="1">
     </div>
   </div>
 
