@@ -201,6 +201,24 @@
 
   </main>
 
+  <!-- Splash screen -->
+  <div id="splash" style="position:fixed;inset:0;z-index:10000;background:#04050c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;cursor:pointer;user-select:none">
+    <svg width="72" height="72" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="4.5" fill="#f59e0b"/>
+      <line x1="12" y1="2.5" x2="12" y2="5"   stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="12" y1="19" x2="12" y2="21.5"  stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="2.5" y1="12" x2="5" y2="12"   stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="19" y1="12" x2="21.5" y2="12"  stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="5.05" y1="5.05" x2="6.87" y2="6.87" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="17.13" y1="17.13" x2="18.95" y2="18.95" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="5.05" y1="18.95" x2="6.87" y2="17.13" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+      <line x1="17.13" y1="6.87" x2="18.95" y2="5.05" stroke="#f59e0b" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <h1 style="font-size:28px;font-weight:700;color:#e2e8f0;margin:0">Sun Tracker</h1>
+    <p style="font-size:15px;color:#64748b;margin:0;animation:splashPulse 2s ease-in-out infinite">Tap anywhere to start</p>
+  </div>
+  <style>@keyframes splashPulse{0%,100%{opacity:.4}50%{opacity:1}}</style>
+
   <!-- Sky View overlay -->
   <div id="skyview-overlay" class="skyview-overlay hidden">
     <canvas id="skyview-canvas" class="skyview-canvas"></canvas>

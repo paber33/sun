@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initSkyViewButtons();
   registerSW();
   updateAll();
-  tryGeolocation();
   startClock();
+  initSplash();
 });
 
 // ─── Service Worker ───────────────────────────────────────────────────────────
@@ -519,6 +519,18 @@ function showToast(msg) {
 }
 
 // ─── Sky View integration ─────────────────────────────────────────────────────
+function initSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash) return;
+  splash.addEventListener('click', () => {
+    splash.style.opacity = '0';
+    splash.style.transition = 'opacity 0.4s';
+    setTimeout(() => splash.remove(), 400);
+    tryGeolocation();
+    openSkyView().catch(() => {});
+  }, { once: true });
+}
+
 function initSkyViewButtons() {
   document.getElementById('skyview-btn').addEventListener('click', () => {
     // openSkyView is async but we handle errors inside it

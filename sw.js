@@ -1,4 +1,4 @@
-const CACHE = 'sun-tracker-v3';
+const CACHE = 'sun-tracker-v4';
 const ASSETS = [
   '.',
   'index.html',
