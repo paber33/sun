@@ -288,7 +288,7 @@ function _render() {
 
   ctx.clearRect(0, 0, W, H);
 
-  const cam = _cameraBasis(alpha, beta, gamma);
+  const cam = _cameraBasis(alpha, beta, 0);  // ignore roll so horizon stays level
 
   // ── Horizon screen position ─────────────────────────────────────────────────
   // Horizon point projects at cy + tan(elev)*focal (positive = lower on screen when looking up)
