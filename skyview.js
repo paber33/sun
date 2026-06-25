@@ -53,6 +53,10 @@ async function openSkyView() {
 
   _buildSunPath();
 
+  // Time slider
+  _initTimeSlider();
+  _applyTimeBarStyles();
+
   // Default camera: face toward current sun azimuth, or south if below horizon
   const cd0 = new Date(d.date);
   cd0.setHours(Math.floor(d.minutes / 60), d.minutes % 60, 0, 0);
@@ -217,6 +221,51 @@ function _touchMove(e) {
   SKY.beta  = Math.max(10, Math.min(170, SKY.beta - dy * 0.25));
   SKY.drag.lastX = e.touches[0].clientX;
   SKY.drag.lastY = e.touches[0].clientY;
+}
+
+// ─── Time slider ─────────────────────────────────────────────────────────────
+
+function _applyTimeBarStyles() {
+  const bar = document.getElementById('skyview-time-bar');
+  if (!bar) return;
+  Object.assign(bar.style, {
+    position: 'absolute', bottom: '0', left: '0', right: '0',
+    height: '72px', background: 'rgba(4,5,12,0.92)',
+    borderTop: '1px solid rgba(60,90,150,0.5)',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center',
+    gap: '6px', padding: '0 20px', zIndex: '9015',
+  });
+  const label = document.getElementById('skyview-time-label');
+  if (label) Object.assign(label.style, {
+    fontSize: '13px', fontWeight: '600', color: '#f59e0b',
+    letterSpacing: '1px', fontFamily: '-apple-system, system-ui, sans-serif',
+  });
+  const slider = document.getElementById('skyview-slider');
+  if (slider) Object.assign(slider.style, {
+    width: '100%', height: '4px', cursor: 'pointer',
+    accentColor: '#f59e0b', outline: 'none',
+  });
+}
+
+function _initTimeSlider() {
+  const slider = document.getElementById('skyview-slider');
+  const label  = document.getElementById('skyview-time-label');
+  if (!slider) return;
+
+  slider.value = SKY.minutes;
+  label.textContent = _minsToTime(SKY.minutes);
+
+  slider.oninput = () => {
+    SKY.minutes = parseInt(slider.value, 10);
+    label.textContent = _minsToTime(SKY.minutes);
+  };
+}
+
+function _minsToTime(mins) {
+  const h = Math.floor(mins / 60).toString().padStart(2, '0');
+  const m = (mins % 60).toString().padStart(2, '0');
+  return `${h}:${m}`;
 }
 
 // ─── Resize ───────────────────────────────────────────────────────────────────
@@ -598,10 +647,11 @@ function _drawHUD(ctx, W, H) {
   ctx.fillText(`${facingDir}  ${facingAz}°`, W / 2, Math.max(20, H / 22));
   ctx.shadowBlur = 0;
 
-  // ── Bottom info bar ────────────────────────────────────────────────────────
+  // ── Bottom info bar (sits above the HTML time slider, ~72px) ───────────────
   if (SKY._currentAz != null) {
+    const sliderH = 72 * devicePixelRatio;
     const barH = Math.max(56, H / 11);
-    const barY = H - barH;
+    const barY = H - sliderH - barH;
 
     // Semi-transparent backdrop
     ctx.fillStyle = 'rgba(4,5,12,0.82)';
