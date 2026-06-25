@@ -64,8 +64,8 @@ async function openSkyView() {
   const az0  = (pos0.azimuth * 180 / Math.PI + 180 + 360) % 360;
   const alt0 = Math.max(0, pos0.altitude * 180 / Math.PI);
   SKY.alpha = az0;
-  SKY.beta  = 90 + Math.min(50, alt0);
-  _sm.alpha = SKY.alpha; _sm.beta = SKY.beta; _sm.gamma = 0;
+  SKY.beta  = 90;   // start horizontal — user tilts up with gyro to find the sun
+  _sm.alpha = SKY.alpha; _sm.beta = 90; _sm.gamma = 0;
 
   _resize();
   window.addEventListener('resize', _resize);
@@ -291,9 +291,10 @@ function _render() {
   const cam = _cameraBasis(alpha, beta, gamma);
 
   // ── Horizon screen position ─────────────────────────────────────────────────
+  // Horizon point projects at cy + tan(elev)*focal (positive = lower on screen when looking up)
   const elev   = (beta - 90) * Math.PI / 180;
   const focal  = (W / 2) / Math.tan(FOV / 2 * Math.PI / 180);
-  const hY     = H * (0.5 + HORIZON_Y) + Math.tan(-elev) * focal;
+  const hY     = H * (0.5 + HORIZON_Y) + Math.tan(elev) * focal;
   const skyBot = Math.max(0, Math.min(H, hY));
 
   // ── Sky gradient ────────────────────────────────────────────────────────────
