@@ -124,8 +124,9 @@ function _handleOrientation(e) {
   _sm.gamma = _sm.gamma + SMOOTH * (gammaRaw - _sm.gamma);
 
   SKY.alpha = _sm.alpha;
-  SKY.beta  = _sm.beta;
-  SKY.gamma = _sm.gamma;
+  // Keep horizon fixed: ignore tilt (beta), always look horizontally
+  SKY.beta  = 90;
+  SKY.gamma = 0;
 }
 
 async function _requestOrientation() {
