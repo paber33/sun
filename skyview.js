@@ -128,7 +128,7 @@ function _handleOrientation(e) {
   _sm.gamma = _sm.gamma + SMOOTH * (gammaRaw - _sm.gamma);
 
   SKY.alpha = _sm.alpha;
-  SKY.beta  = _sm.beta;
+  SKY.beta  = Math.max(90, _sm.beta);  // never look below horizon
   SKY.gamma = _sm.gamma;
 }
 
@@ -202,7 +202,7 @@ function _dragMove(e) {
   const dx = e.clientX - SKY.drag.lastX;
   const dy = e.clientY - SKY.drag.lastY;
   SKY.alpha = (SKY.alpha + dx * 0.25 + 360) % 360;
-  SKY.beta  = Math.max(10, Math.min(170, SKY.beta - dy * 0.25));
+  SKY.beta  = Math.max(90, Math.min(170, SKY.beta - dy * 0.25));
   SKY.drag.lastX = e.clientX;
   SKY.drag.lastY = e.clientY;
 }
@@ -218,7 +218,7 @@ function _touchMove(e) {
   const dx = e.touches[0].clientX - SKY.drag.lastX;
   const dy = e.touches[0].clientY - SKY.drag.lastY;
   SKY.alpha = (SKY.alpha + dx * 0.25 + 360) % 360;
-  SKY.beta  = Math.max(10, Math.min(170, SKY.beta - dy * 0.25));
+  SKY.beta  = Math.max(90, Math.min(170, SKY.beta - dy * 0.25));
   SKY.drag.lastX = e.touches[0].clientX;
   SKY.drag.lastY = e.touches[0].clientY;
 }
